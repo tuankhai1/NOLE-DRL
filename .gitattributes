@@ -1,0 +1,5 @@
+# Ep xuong dong LF cho file chay tren Linux (tranh loi \r khi chay tren may chu/Actions)
+*.sh text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

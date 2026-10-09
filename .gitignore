@@ -1,0 +1,12 @@
+# KHONG BAO GIO day cac file chua bi mat len repo cong khai:
+config.json
+drl_watch.log
+drl_watch.log.old
+__pycache__/
+*.pyc
+drl.key
+*.key
+*.key.pub
+KEYS/
+
+# state.json CO duoc commit (khong chua bi mat) - GitHub Actions can no de nho su kien.

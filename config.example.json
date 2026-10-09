@@ -1,0 +1,11 @@
+{
+  "session_token": "DAN_COOKIE_TokenBKNexus_VAO_DAY",
+  "username": "MSSV_CUA_BAN",
+
+  "telegram_bot_token": "TOKEN_BOT_TU_BOTFATHER",
+  "telegram_chat_id": "CHAT_ID_CUA_BAN",
+
+  "poll_seconds": 30,
+  "notify_states": ["OPEN", "SOON"],
+  "notify_new_any_state": true
+}
