@@ -1,5 +1,5 @@
 {
-  "tg_offset": 433883099,
+  "tg_offset": 433883100,
   "events": {
     "13": {
       "state": "ENDED",
@@ -112,5 +112,6 @@
       "title": "[Số 3] Tọa đàm xây dựng động lực học tập _Tháng 9.2026"
     }
   },
-  "initialized": true
+  "initialized": true,
+  "last_auth_alert": 1791581996.4180596
 }
