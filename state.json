@@ -1,0 +1,116 @@
+{
+  "tg_offset": 433883094,
+  "events": {
+    "13": {
+      "state": "ENDED",
+      "remaining": 923,
+      "title": "Khai giảng năm học 2026-2027"
+    },
+    "3": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "Buổi 1: Sinh hoạt định hướng K71"
+    },
+    "4": {
+      "state": "ENDED",
+      "remaining": 13,
+      "title": "Buổi 2: Sinh hoạt định hướng K71"
+    },
+    "5": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "Buổi 3: Sinh hoạt định hướng K71"
+    },
+    "6": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "Buổi 4: Sinh hoạt định hướng K71"
+    },
+    "7": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "Buổi 5: Sinh hoạt định hướng K71"
+    },
+    "8": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "Buổi 6: Sinh hoạt định hướng K71"
+    },
+    "9": {
+      "state": "ENDED",
+      "remaining": 1,
+      "title": "Buổi 7: Sinh hoạt định hướng K71"
+    },
+    "10": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "Buổi 8: Sinh hoạt định hướng K71"
+    },
+    "11": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "Buổi 9: Sinh hoạt định hướng K71"
+    },
+    "12": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "Buổi 10: Sinh hoạt định hướng K71"
+    },
+    "14": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "Buổi 11. Sinh hoạt chuyên đề K70 + định hướng K71"
+    },
+    "15": {
+      "state": "ENDED",
+      "remaining": 1,
+      "title": "[Số 1] Tọa đàm xây dựng động lực học tập _Tháng 9.2026"
+    },
+    "16": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "Lễ phát động Cuộc thi “Tìm hiểu pháp luật về Trật tự, an toàn giao thông đường bộ năm 2026”"
+    },
+    "20": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "THAM GIA CỔ VŨ HỘI THI \"TIẾNG HÁT KARAOKE CÔNG ĐOÀN\" NĂM 2026"
+    },
+    "19": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "[Số 2] Tọa đàm xây dựng động lực học tập _Tháng 9.2026"
+    },
+    "17": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "N1: Tình nguyện viên Lễ trao bằng tháng 9.2026"
+    },
+    "18": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "N2: Tình nguyện viên Lễ trao bằng tháng 9.2026"
+    },
+    "22": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "[Số 4] Tọa đàm xây dựng động lực học tập _Tháng 10.2026"
+    },
+    "23": {
+      "state": "FULL",
+      "remaining": 0,
+      "title": "TNV B1 hỗ trợ công tác chuẩn bị cho SK 15/10/2026"
+    },
+    "24": {
+      "state": "FULL",
+      "remaining": 0,
+      "title": "TNV B2 hỗ trợ công tác chuẩn bị cho SK 15/10/2026"
+    },
+    "21": {
+      "state": "ENDED",
+      "remaining": 0,
+      "title": "[Số 3] Tọa đàm xây dựng động lực học tập _Tháng 9.2026"
+    }
+  },
+  "initialized": true
+}
