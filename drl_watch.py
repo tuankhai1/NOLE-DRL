@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DRL watcher - theo doi su kien dat ve tren ctsv.hust.edu.vn va bao ve Telegram.
+DRL watcher - monitors ticket events on ctsv.hust.edu.vn and alerts via Telegram.
 
-Khong can mat khau truong. Bot dung Token phien (cookie TokenBKNexus) + UserName (MSSV)
-ma ban tu copy tu trinh duyet sau khi dang nhap web.
+No school password needed. The bot uses a session token (the TokenBKNexus cookie) plus
+UserName (student ID) that you copy from your browser after logging in to the website.
 
-Lenh:
-    python drl_watch.py run       # chay vong lap theo doi (mac dinh)
-    python drl_watch.py once      # kiem tra 1 lan roi thoat (dung cho Task Scheduler)
-    python drl_watch.py check     # goi API 1 lan, in danh sach su kien (kiem tra token)
-    python drl_watch.py getchat   # lay chat_id Telegram (sau khi ban nhan tin cho bot)
-    python drl_watch.py test      # gui 1 tin nhan thu qua Telegram
+Commands:
+    python drl_watch.py run       # run the watch loop (default)
+    python drl_watch.py once      # check once and exit (for schedulers / CI)
+    python drl_watch.py check     # call the API once and print the event list (token test)
+    python drl_watch.py getchat   # get your Telegram chat_id (after you message the bot)
+    python drl_watch.py test      # send a test Telegram message
 """
 import json
 import os
@@ -25,7 +25,7 @@ import urllib.parse
 API_BASE = "https://ctsv.hust.edu.vn/bknexus/"
 WEB_URL = "https://ctsv.hust.edu.vn/dat-ve"
 
-# Console Windows mac dinh cp1252 -> khong in duoc tieng Viet/emoji. Ep UTF-8.
+# Windows consoles default to cp1252 and cannot print Vietnamese/emoji. Force UTF-8.
 for _s in (sys.stdout, sys.stderr):
     try:
         _s.reconfigure(encoding="utf-8", errors="replace")
@@ -37,12 +37,12 @@ CONFIG_PATH = os.path.join(HERE, "config.json")
 STATE_PATH = os.path.join(HERE, "state.json")
 
 STATE_LABEL = {
-    "OPEN": "Dang mo dang ky",
-    "SOON": "Chua mo dang ky",
-    "FULL": "Da het cho",
-    "CLOSED": "Da dong dang ky",
-    "ENDED": "Da dien ra",
-    "DRAFT": "Nhap",
+    "OPEN": "Open for registration",
+    "SOON": "Not open yet",
+    "FULL": "Full",
+    "CLOSED": "Registration closed",
+    "ENDED": "Ended",
+    "DRAFT": "Draft",
 }
 STATE_EMOJI = {
     "OPEN": "\U0001F7E2",   # green circle
@@ -62,7 +62,7 @@ def log(*args):
     line = ts + " " + " ".join(str(a) for a in args)
     print(line, flush=True)
     try:
-        # xoay log khi qua 1MB de khong phinh to
+        # rotate the log once it passes 1MB so it does not grow unbounded
         if os.path.exists(LOG_PATH) and os.path.getsize(LOG_PATH) > 1_000_000:
             os.replace(LOG_PATH, LOG_PATH + ".old")
         with open(LOG_PATH, "a", encoding="utf-8") as f:
@@ -78,7 +78,7 @@ def load_json(path, default):
     except FileNotFoundError:
         return default
     except Exception as e:
-        log("Loi doc", path, "->", e)
+        log("Failed to read", path, "->", e)
         return default
 
 
@@ -89,10 +89,10 @@ def save_json(path, data):
     os.replace(tmp, path)
 
 
-# Chay tren GitHub Actions? (anh huong cach xu ly lenh /token)
+# Running on GitHub Actions? (changes how the /token command behaves)
 IS_ACTIONS = os.environ.get("GITHUB_ACTIONS") == "true"
 
-# Cho phep cau hinh qua bien moi truong (dung cho GitHub Actions Secrets).
+# Allow configuration via environment variables (used for GitHub Actions Secrets).
 ENV_MAP = {
     "session_token": "DRL_SESSION_TOKEN",
     "username": "DRL_USERNAME",
@@ -103,7 +103,7 @@ ENV_MAP = {
 
 def load_config(need=("session_token", "username", "telegram_bot_token", "telegram_chat_id")):
     cfg = load_json(CONFIG_PATH, {}) or {}
-    # Bien moi truong ghi de len config.json (neu co)
+    # Environment variables override config.json (if present)
     for key, env in ENV_MAP.items():
         val = os.environ.get(env)
         if val not in (None, ""):
@@ -116,8 +116,8 @@ def load_config(need=("session_token", "username", "telegram_bot_token", "telegr
 
     missing = [k for k in need if not str(cfg.get(k, "")).strip()]
     if missing:
-        log("Thieu cau hinh:", ", ".join(missing),
-            "- dien vao config.json hoac dat bien moi truong DRL_* tuong ung.")
+        log("Missing config:", ", ".join(missing),
+            "- set it in config.json or via the matching DRL_* environment variable.")
         sys.exit(1)
     cfg.setdefault("poll_seconds", 30)
     cfg.setdefault("notify_states", ["OPEN", "SOON"])
@@ -126,7 +126,7 @@ def load_config(need=("session_token", "username", "telegram_bot_token", "telegr
 
 
 def save_config(cfg):
-    """Ghi lai config.json (dung khi cap nhat token qua Telegram)."""
+    """Write config.json back (used when updating the token via Telegram)."""
     out = {k: cfg[k] for k in (
         "session_token", "username", "telegram_bot_token", "telegram_chat_id",
         "poll_seconds", "notify_states", "notify_new_any_state") if k in cfg}
@@ -161,12 +161,12 @@ def http_post_json(url, payload, cookie=None, timeout=25):
         obj["_http"] = code
         return obj
     except Exception:
-        return {"_http": code, "RespCode": -999, "RespText": "Phan hoi khong phai JSON",
+        return {"_http": code, "RespCode": -999, "RespText": "Non-JSON response",
                 "_raw": raw[:400]}
 
 
 def get_events(cfg):
-    """Goi Event/GetEvents. Tra ve (events_list, error_str_or_None)."""
+    """Call Event/GetEvents. Returns (events_list, error_str_or_None)."""
     cookie = "TokenBKNexus=%s; UserName=%s" % (cfg["session_token"], cfg["username"])
     payload = {"Token": cfg["session_token"], "UserName": cfg["username"]}
     res = http_post_json(API_BASE + "Event/GetEvents", payload, cookie=cookie)
@@ -177,7 +177,7 @@ def get_events(cfg):
     if rc == 0:
         return res.get("Events") or [], None
     if rc in (401, 104, 105) or res.get("_http") == 401:
-        return None, "auth:" + str(res.get("RespText") or "Phien dang nhap khong hop le (token het han)")
+        return None, "auth:" + str(res.get("RespText") or "Invalid session (token expired)")
     return None, "api:RespCode=%s %s" % (rc, res.get("RespText") or "")
 
 
@@ -210,7 +210,7 @@ def tg_send(cfg, text, silent=False):
         })
         if res.get("ok"):
             return True
-        log("Telegram loi (lan %d):" % (attempt + 1), res.get("description") or res.get("error"))
+        log("Telegram error (attempt %d):" % (attempt + 1), res.get("description") or res.get("error"))
         time.sleep(2 * (attempt + 1))
     return False
 
@@ -228,18 +228,18 @@ def tg_get_updates(cfg, offset):
 
 
 HELP_TEXT = (
-    "\U0001F916 <b>Lenh bot DRL</b>\n"
-    "/status - tinh trang bot (token con ok khong, bao nhieu su kien)\n"
-    "/list - cac su kien dang mo dang ky ngay bay gio\n"
-    "/check - kiem tra ngay lap tuc\n"
-    "/token &lt;gia_tri&gt; - cap nhat TokenBKNexus moi (khi token het han)\n"
-    "/mssv &lt;mssv&gt; - cap nhat ma so sinh vien\n"
-    "/help - xem lai danh sach lenh"
+    "\U0001F916 <b>DRL bot commands</b>\n"
+    "/status - bot health (token still valid, how many events)\n"
+    "/list - events open for registration right now\n"
+    "/check - check immediately\n"
+    "/token &lt;value&gt; - update the TokenBKNexus (when the token expires)\n"
+    "/mssv &lt;id&gt; - update the student ID\n"
+    "/help - show the command list"
 )
 
 
 def process_commands(cfg, state):
-    """Doc lenh gui toi bot tu Telegram va xu ly. Chi nhan tu dung chat_id."""
+    """Read commands sent to the bot on Telegram and handle them. Only from the configured chat_id."""
     offset = int(state.get("tg_offset", 0))
     updates = tg_get_updates(cfg, offset + 1 if offset else 0)
     did = False
@@ -249,7 +249,7 @@ def process_commands(cfg, state):
         msg = upd.get("message") or {}
         chat = msg.get("chat") or {}
         if str(chat.get("id")) != str(cfg["telegram_chat_id"]):
-            continue  # bo qua nguoi la
+            continue  # ignore strangers
         text = (msg.get("text") or "").strip()
         if not text.startswith("/"):
             continue
@@ -264,18 +264,18 @@ def process_commands(cfg, state):
         elif cmd == "/list":
             tg_send(cfg, cmd_list_text(cfg))
         elif cmd == "/check":
-            tg_send(cfg, "\U0001F50D Dang kiem tra...")
+            tg_send(cfg, "\U0001F50D Checking...")
             poll_once(cfg, state)
-            tg_send(cfg, "✅ Da kiem tra xong. " + cmd_list_text(cfg))
+            tg_send(cfg, "✅ Done. " + cmd_list_text(cfg))
         elif cmd == "/token":
             if not arg:
-                tg_send(cfg, "Cu phap: <code>/token GIA_TRI_TokenBKNexus</code>")
+                tg_send(cfg, "Usage: <code>/token TokenBKNexus_VALUE</code>")
             elif IS_ACTIONS:
                 tg_send(cfg,
-                        "ℹ️ Bot dang chay tren GitHub Actions nen khong luu token "
-                        "truc tiep duoc.\nHay vao repo tren GitHub: <b>Settings → Secrets and "
-                        "variables → Actions → DRL_SESSION_TOKEN → Update</b>, "
-                        "dan gia tri moi vao do (lam tren dien thoai duoc).")
+                        "ℹ️ The bot runs on GitHub Actions, so it cannot store the token "
+                        "directly.\nGo to your repo on GitHub: <b>Settings → Secrets and "
+                        "variables → Actions → DRL_SESSION_TOKEN → Update</b> and paste the "
+                        "new value there (you can do this from your phone).")
             else:
                 cfg["session_token"] = arg.split()[0]
                 save_config(cfg)
@@ -283,18 +283,18 @@ def process_commands(cfg, state):
                 save_json(STATE_PATH, state)
                 ev, err = get_events(cfg)
                 if err:
-                    tg_send(cfg, "⚠️ Da luu token nhung van loi: " + esc(err))
+                    tg_send(cfg, "⚠️ Token saved but still failing: " + esc(err))
                 else:
-                    tg_send(cfg, "✅ Da cap nhat token. Doc duoc %d su kien. Bot chay tiep binh thuong." % len(ev))
+                    tg_send(cfg, "✅ Token updated. Read %d events. The bot keeps running normally." % len(ev))
         elif cmd == "/mssv":
             if not arg:
-                tg_send(cfg, "Cu phap: <code>/mssv 20xxxxxx</code>")
+                tg_send(cfg, "Usage: <code>/mssv 20xxxxxx</code>")
             else:
                 cfg["username"] = arg.split()[0]
                 save_config(cfg)
-                tg_send(cfg, "✅ Da cap nhat MSSV: " + esc(cfg["username"]))
+                tg_send(cfg, "✅ Student ID updated: " + esc(cfg["username"]))
         else:
-            tg_send(cfg, "Khong hieu lenh. Go /help de xem cac lenh.")
+            tg_send(cfg, "Unknown command. Send /help to see the commands.")
     if did:
         save_json(STATE_PATH, state)
 
@@ -302,19 +302,19 @@ def process_commands(cfg, state):
 def cmd_status_text(cfg, state):
     has_token = bool(str(cfg.get("session_token", "")).strip())
     if not has_token:
-        return ("⚠️ Chua co token. Gui /token &lt;gia_tri&gt; de bot bat dau.\n"
-                "MSSV hien tai: " + esc(cfg.get("username") or "(chua co)"))
+        return ("⚠️ No token yet. Send /token &lt;value&gt; to start the bot.\n"
+                "Current student ID: " + esc(cfg.get("username") or "(none)"))
     ev, err = get_events(cfg)
     if err:
         if err.startswith("auth"):
-            return "⚠️ Token het han/khong hop le. Gui /token &lt;gia_tri_moi&gt;."
-        return "⚠️ Loi: " + esc(err)
+            return "⚠️ Token expired/invalid. Send /token &lt;new_value&gt;."
+        return "⚠️ Error: " + esc(err)
     opening = [e for e in ev if e.get("State") == "OPEN"]
     known = state.get("events", {})
-    return ("✅ Bot dang chay binh thuong.\n"
-            "Theo doi: <b>%d</b> su kien (da ghi nho %d).\n"
-            "Dang mo dang ky: <b>%d</b>\n"
-            "Chu ky kiem tra: %ds/lan." % (len(ev), len(known), len(opening), cfg["poll_seconds"]))
+    return ("✅ Bot is running normally.\n"
+            "Tracking: <b>%d</b> events (remembered %d).\n"
+            "Open for registration: <b>%d</b>\n"
+            "Check interval: every %ds." % (len(ev), len(known), len(opening), cfg["poll_seconds"]))
 
 
 def cmd_list_text(cfg):
@@ -323,8 +323,8 @@ def cmd_list_text(cfg):
         return "⚠️ " + esc(err)
     opening = [e for e in ev if e.get("State") == "OPEN"]
     if not opening:
-        return "Hien khong co su kien nao dang mo dang ky."
-    return "\U0001F39F️ <b>Dang mo dang ky (%d):</b>\n\n" % len(opening) + "\n\n".join(
+        return "No events are open for registration right now."
+    return "\U0001F39F️ <b>Open for registration (%d):</b>\n\n" % len(opening) + "\n\n".join(
         event_block(e, "•") for e in opening[:8]) + "\n\n\U0001F517 " + WEB_URL
 
 
@@ -355,7 +355,7 @@ def event_block(ev, header):
     st = ev.get("State", "")
     emoji = STATE_EMOJI.get(st, "•")
     label = STATE_LABEL.get(st, st)
-    lines = ["%s <b>%s</b>" % (header, esc(ev.get("Title", "(khong ten)")))]
+    lines = ["%s <b>%s</b>" % (header, esc(ev.get("Title", "(untitled)")))]
     if ev.get("GroupName"):
         lines.append("\U0001F4C1 %s" % esc(ev["GroupName"]))
     tr = time_range(ev)
@@ -367,14 +367,14 @@ def event_block(ev, header):
     reg = ev.get("Registered")
     rem = ev.get("Remaining")
     if cap:
-        slot = "\U0001F39F️ Con %s/%s cho" % (
+        slot = "\U0001F39F️ %s/%s slots left" % (
             rem if rem is not None else "?", cap)
         if reg is not None:
-            slot += " (da dang ky %s)" % reg
+            slot += " (%s registered)" % reg
         lines.append(slot)
-    lines.append("%s Trang thai: <b>%s</b>" % (emoji, esc(label)))
+    lines.append("%s Status: <b>%s</b>" % (emoji, esc(label)))
     if ev.get("MyTicket"):
-        lines.append("✅ Ban DA co ve su kien nay")
+        lines.append("✅ You ALREADY have a ticket for this event")
     return "\n".join(lines)
 
 
@@ -403,27 +403,27 @@ def poll_once(cfg, state):
     if err:
         if err.startswith("auth:"):
             last = state.get("last_auth_alert", 0)
-            if now - last > 3 * 3600:  # canh bao toi da moi 3 gio
+            if now - last > 3 * 3600:  # alert at most once every 3 hours
                 tg_send(cfg,
-                        "⚠️ <b>Token het han</b>\n"
-                        "Bot khong truy cap duoc ctsv nua. Hay dang nhap lai web, "
-                        "copy cookie <code>TokenBKNexus</code> moi vao config.json roi chay lai.\n"
-                        "Chi tiet: " + esc(err[5:]))
+                        "⚠️ <b>Token expired</b>\n"
+                        "The bot can no longer reach ctsv. Log in to the website again, "
+                        "copy a fresh <code>TokenBKNexus</code> cookie into config.json, and restart.\n"
+                        "Details: " + esc(err[5:]))
                 state["last_auth_alert"] = now
                 save_json(STATE_PATH, state)
             log("AUTH:", err)
         else:
-            log("Loi poll (bo qua, thu lai sau):", err)
+            log("Poll error (skipping, will retry):", err)
         return
 
-    # thanh cong -> reset canh bao auth
+    # success -> reset the auth alert
     if state.get("last_auth_alert"):
         state["last_auth_alert"] = 0
 
     known = state.setdefault("events", {})  # key -> {state, remaining, title}
     first_run = not state.get("initialized")
 
-    notes = []  # (header, event) can bao
+    notes = []  # (header, event) to notify
     for ev in events:
         k = event_key(ev)
         cur = {
@@ -436,22 +436,22 @@ def poll_once(cfg, state):
         if prev is None:
             if not first_run:
                 if ev.get("State") == "OPEN" and is_bookable(ev):
-                    notes.append(("\U0001F39F️ <b>SU KIEN MOI - DANG MO DANG KY</b>", ev))
+                    notes.append(("\U0001F39F️ <b>NEW EVENT - OPEN FOR REGISTRATION</b>", ev))
                 elif cfg["notify_new_any_state"] or ev.get("State") in cfg["notify_states"]:
-                    notes.append(("\U0001F195 <b>SU KIEN MOI</b>", ev))
+                    notes.append(("\U0001F195 <b>NEW EVENT</b>", ev))
         else:
-            # chuyen sang OPEN (quan trong nhat - canh slot)
+            # switched to OPEN (most important - slot alert)
             if prev.get("state") != "OPEN" and ev.get("State") == "OPEN":
-                notes.append(("\U0001F514 <b>DA MO DANG KY</b>", ev))
-            # slot vua duoc nha ra (FULL -> con cho, van OPEN)
+                notes.append(("\U0001F514 <b>REGISTRATION OPENED</b>", ev))
+            # a slot just freed up (FULL -> has room again, still OPEN)
             elif (ev.get("State") == "OPEN" and is_bookable(ev)
                   and (prev.get("remaining") == 0)
                   and (ev.get("Remaining") or 0) > 0):
-                notes.append(("♻️ <b>VUA CO SLOT TRONG</b>", ev))
+                notes.append(("♻️ <b>A SLOT JUST OPENED UP</b>", ev))
 
         known[k] = cur
 
-    # don dep su kien bien mat (tuy chon - giu lai cho gon)
+    # drop events that disappeared (optional - keeps state tidy)
     live_keys = {event_key(e) for e in events}
     for k in list(known.keys()):
         if k not in live_keys:
@@ -460,23 +460,23 @@ def poll_once(cfg, state):
     if first_run:
         state["initialized"] = True
         open_now = [e for e in events if e.get("State") == "OPEN"]
-        summary = ("\U0001F916 <b>Bot DRL da khoi dong</b>\n"
-                   "Dang theo doi <b>%d</b> su kien (moi %ds/lan).\n"
-                   "Dang mo dang ky ngay bay gio: <b>%d</b>" % (
+        summary = ("\U0001F916 <b>DRL bot started</b>\n"
+                   "Tracking <b>%d</b> events (every %ds).\n"
+                   "Open for registration right now: <b>%d</b>" % (
                        len(events), cfg["poll_seconds"], len(open_now)))
         if open_now:
             summary += "\n\n" + "\n\n".join(
                 event_block(e, "\U0001F39F️") for e in open_now[:5])
         summary += "\n\n\U0001F517 %s" % WEB_URL
         tg_send(cfg, summary, silent=True)
-        log("Khoi tao baseline: %d su kien, %d dang mo." % (len(events), len(open_now)))
+        log("Baseline initialized: %d events, %d open." % (len(events), len(open_now)))
     else:
         for header, ev in notes:
-            msg = event_block(ev, header) + "\n\n\U0001F449 Vao dat ve: %s" % WEB_URL
+            msg = event_block(ev, header) + "\n\n\U0001F449 Book a ticket: %s" % WEB_URL
             ok = tg_send(cfg, msg)
-            log(("DA BAO" if ok else "BAO LOI"), "-", ev.get("Title"))
+            log(("NOTIFIED" if ok else "SEND FAILED"), "-", ev.get("Title"))
         if not notes:
-            log("Khong co thay doi. (%d su kien)" % len(events))
+            log("No changes. (%d events)" % len(events))
 
     save_json(STATE_PATH, state)
 
@@ -491,50 +491,50 @@ def has_credentials(cfg):
 def cmd_run(cfg):
     state = load_json(STATE_PATH, {})
     interval = max(10, int(cfg["poll_seconds"]))
-    log("Bat dau theo doi. Chu ky %ds. Ctrl+C de dung." % interval)
+    log("Watching. Interval %ds. Press Ctrl+C to stop." % interval)
     if not has_credentials(cfg):
-        log("Chua co session_token/username - cho lenh /token tu Telegram.")
-        tg_send(cfg, "\U0001F916 Bot da chay nhung <b>chua co token truong</b>.\n"
-                     "Gui <code>/token GIA_TRI_TokenBKNexus</code> va "
-                     "<code>/mssv MSSV</code> de bat dau. Go /help de xem huong dan.")
+        log("No session_token/username yet - waiting for the /token command from Telegram.")
+        tg_send(cfg, "\U0001F916 The bot is running but has <b>no school token yet</b>.\n"
+                     "Send <code>/token TokenBKNexus_VALUE</code> and "
+                     "<code>/mssv STUDENT_ID</code> to start. Send /help for guidance.")
     while True:
         try:
-            # luon lang nghe lenh Telegram (ke ca khi chua co token)
+            # always listen for Telegram commands (even without a token)
             process_commands(cfg, state)
             if has_credentials(cfg):
                 poll_once(cfg, state)
         except KeyboardInterrupt:
-            log("Dung theo doi.")
+            log("Stopped watching.")
             break
         except Exception as e:
-            log("Loi khong mong doi (tiep tuc):", repr(e))
+            log("Unexpected error (continuing):", repr(e))
         try:
             time.sleep(interval)
         except KeyboardInterrupt:
-            log("Dung theo doi.")
+            log("Stopped watching.")
             break
 
 
 def cmd_once(cfg):
     state = load_json(STATE_PATH, {})
-    # nghe lenh Telegram mot luot (phuc vu /status, /list... khi chay tren Actions)
+    # listen for Telegram commands once (serves /status, /list... when running on Actions)
     try:
         process_commands(cfg, state)
     except Exception as e:
-        log("Loi doc lenh Telegram (bo qua):", repr(e))
+        log("Failed to read Telegram commands (skipping):", repr(e))
     poll_once(cfg, state)
 
 
 def cmd_check(cfg):
     events, err = get_events(cfg)
     if err:
-        log("LOI:", err)
+        log("ERROR:", err)
         if err.startswith("auth"):
-            log("-> Token sai/het han. Copy lai cookie TokenBKNexus tu trinh duyet.")
+            log("-> Token wrong/expired. Copy the TokenBKNexus cookie from the browser again.")
         return
-    log("OK - %d su kien:" % len(events))
+    log("OK - %d events:" % len(events))
     for e in events:
-        print("  [%-6s] %-45s | con %s/%s | %s" % (
+        print("  [%-6s] %-45s | %s/%s left | %s" % (
             e.get("State"), str(e.get("Title"))[:45],
             e.get("Remaining"), e.get("Capacity"), fmt_time(e.get("StartTime"))))
 
@@ -542,8 +542,8 @@ def cmd_check(cfg):
 def cmd_getchat(cfg):
     res = tg_api(cfg, "getUpdates", {})
     if not res.get("ok"):
-        log("Loi:", res.get("description") or res.get("error"))
-        log("Kiem tra telegram_bot_token trong config.json co dung khong.")
+        log("Error:", res.get("description") or res.get("error"))
+        log("Check that telegram_bot_token in config.json is correct.")
         return
     seen = {}
     for upd in res.get("result", []):
@@ -554,16 +554,16 @@ def cmd_getchat(cfg):
                 (chat.get("first_name", "") + " " + chat.get("last_name", "")).strip()
                 or chat.get("username") or chat.get("type"))
     if not seen:
-        log("Chua thay tin nhan nao. Hay mo Telegram, tim bot cua ban va bam START / nhan 1 tin, roi chay lai lenh nay.")
+        log("No messages seen yet. Open Telegram, find your bot, tap START / send a message, then run this again.")
         return
-    log("Cac chat_id tim thay (dien vao config.json -> telegram_chat_id):")
+    log("chat_id values found (put into config.json -> telegram_chat_id):")
     for cid, name in seen.items():
         print("   %s  <-  %s" % (cid, name))
 
 
 def cmd_test(cfg):
-    ok = tg_send(cfg, "✅ <b>Test DRL bot</b>\nNeu ban thay tin nhan nay, Telegram da OK!")
-    log("Gui thu:", "THANH CONG" if ok else "THAT BAI")
+    ok = tg_send(cfg, "✅ <b>DRL bot test</b>\nIf you see this message, Telegram is working!")
+    log("Test send:", "SUCCESS" if ok else "FAILED")
 
 
 def main():
@@ -571,7 +571,7 @@ def main():
     if cmd == "getchat":
         cfg = load_config(need=("telegram_bot_token",))
     elif cmd in ("test", "run"):
-        # run co the bootstrap token qua Telegram nen chi can thong tin Telegram
+        # run can bootstrap the token via Telegram, so only Telegram info is required
         cfg = load_config(need=("telegram_bot_token", "telegram_chat_id"))
     else:
         cfg = load_config()

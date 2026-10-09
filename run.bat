@@ -2,10 +2,10 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 echo ============================================
-echo   DRL Watcher - theo doi su kien dat ve HUST
-echo   Dong cua so nay = dung bot. Ctrl+C de thoat.
+echo   DRL Watcher - HUST ticket-event monitor
+echo   Close this window to stop. Ctrl+C to quit.
 echo ============================================
 python drl_watch.py run
 echo.
-echo Bot da dung. Nhan phim bat ky de dong...
+echo Bot stopped. Press any key to close...
 pause >nul

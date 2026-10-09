@@ -1,122 +1,125 @@
-# Đưa bot lên máy chủ đám mây miễn phí (chạy 24/7, không cần laptop)
+# Deploy the bot to a free cloud server (runs 24/7, no laptop needed)
 
-Mục tiêu: bot sống trên một máy chủ luôn bật. Bạn tắt laptop, cất đi — bot vẫn canh và
-nhắn Telegram về điện thoại. **Setup lần đầu làm trên laptop (~20–30 phút, một lần).**
-Sau đó quản lý hoàn toàn bằng điện thoại qua các lệnh Telegram.
+Goal: the bot lives on an always-on server. You can shut your laptop and walk away — it
+keeps watching and pushes Telegram alerts to your phone. **Initial setup is done on a
+laptop (~20–30 minutes, once).** After that you manage everything from your phone via
+Telegram commands.
 
-Hướng dẫn dùng **Oracle Cloud Always Free** (miễn phí vĩnh viễn, mạnh nhất trong các gói
-free). Nhưng **bất kỳ máy chủ Ubuntu nào cũng chạy y hệt** — nếu bạn có sẵn VPS khác,
-nhảy tới [Phần B](#phần-b--cài-bot-lên-máy-chủ).
+This guide uses **Oracle Cloud Always Free** (genuinely free forever, the most generous
+free tier). But **any Ubuntu server works identically** — if you already have a VPS, skip
+to [Part B](#part-b--install-the-bot).
 
 ---
 
-## Phần A — Tạo máy chủ miễn phí (Oracle Cloud)
+## Part A — Create a free server (Oracle Cloud)
 
-> Oracle yêu cầu một thẻ (Visa/Mastercard, kể cả thẻ ảo) để **xác minh danh tính** —
-> **không bị trừ tiền** với gói Always Free. Nếu không có thẻ, báo mình để chọn hướng khác.
+> Oracle requires a card (Visa/Mastercard, virtual cards included) **for identity
+> verification only** — the Always Free tier is **not charged**. No card? Use GitHub
+> Actions instead (`GITHUB_ACTIONS.md`).
 
-1. Vào https://www.oracle.com/cloud/free/ → **Start for free**, đăng ký (email, chọn
-   quốc gia **Vietnam**, xác minh điện thoại + thẻ).
-2. Sau khi vào **Oracle Cloud Console**: menu ☰ → **Compute** → **Instances** →
+1. Go to https://www.oracle.com/cloud/free/ → **Start for free**, sign up (email, country,
+   phone + card verification).
+2. In the **Oracle Cloud Console**: menu ☰ → **Compute** → **Instances** →
    **Create instance**.
-3. Đặt:
-   - **Image**: Canonical **Ubuntu 22.04** (hoặc 24.04).
-   - **Shape**: bấm **Change shape** → chọn **Ampere (ARM)** `VM.Standard.A1.Flex`
-     (1 OCPU, 6 GB là thừa) — đây là phần Always Free. Nếu ARM báo hết chỗ, chọn
-     **VM.Standard.E2.1.Micro** (AMD, cũng Always Free).
-   - **Add SSH keys**: chọn **Generate a key pair for me** → bấm **Save private key**
-     (tải file `.key` về laptop — giữ kỹ, dùng để đăng nhập).
-4. **Create**. Chờ ~1 phút tới khi trạng thái **RUNNING**. Ghi lại **Public IP address**.
-5. Mở cổng mạng cho... *không cần* — bot chỉ gọi ra ngoài, không mở cổng vào. Bỏ qua.
+3. Set:
+   - **Image**: Canonical **Ubuntu 22.04** (or 24.04).
+   - **Shape**: click **Change shape** → **Ampere (ARM)** `VM.Standard.A1.Flex`
+     (1 OCPU, 6 GB is plenty) — this is the Always Free part. If ARM is out of capacity,
+     pick **VM.Standard.E2.1.Micro** (AMD, also Always Free).
+   - **Add SSH keys**: choose **Generate a key pair for me** → click **Save private key**
+     (download the `.key` file — keep it safe, you log in with it).
+4. **Create**. Wait ~1 minute until the status is **RUNNING**. Note the **Public IP address**.
+5. No inbound ports needed — the bot only makes outbound calls. Skip firewall changes.
 
 ---
 
-## Phần B — Cài bot lên máy chủ
+## Part B — Install the bot
 
-Làm trên **laptop**, trong thư mục dự án. Mở **PowerShell**.
+Do this on your **laptop**, in the project folder. Open **PowerShell**.
 
-### 1. Đăng nhập thử vào máy chủ
-Thay `<KEY>` = đường dẫn file private key vừa tải, `<IP>` = Public IP:
+### 1. Test the SSH connection
+Replace `<KEY>` = path to the private key you downloaded, `<IP>` = the Public IP:
 ```powershell
 ssh -i "<KEY>" ubuntu@<IP>
 ```
-Lần đầu gõ `yes`. Vào được (thấy dấu nhắc `ubuntu@...`) là OK. Gõ `exit` để ra.
+Type `yes` the first time. If you get a prompt like `ubuntu@...`, it works. Type `exit` to leave.
 
-> Oracle Ubuntu đăng nhập bằng user **`ubuntu`**. (VPS khác có thể là `root` hoặc tên khác.)
+> Oracle Ubuntu logs in as the **`ubuntu`** user. (Other VPSes may use `root` or another name.)
 
-### 2. Copy bot + cấu hình lên máy chủ
-Chạy trong thư mục dự án (đã `cd` vào đó):
+### 2. Copy the bot + config to the server
+Run from the project folder (cd into it first):
 ```powershell
 scp -i "<KEY>" drl_watch.py config.json deploy/setup.sh ubuntu@<IP>:~
 ```
-Lệnh này đẩy 3 file (kèm `config.json` đã có sẵn token của bạn) lên máy chủ.
+This uploads 3 files (including your `config.json` with the token already filled in).
 
-### 3. Cài đặt (tự tạo dịch vụ chạy nền)
+### 3. Install (creates a background service)
 ```powershell
 ssh -i "<KEY>" ubuntu@<IP> "bash ~/setup.sh"
 ```
-Script sẽ cài `drl_watch.py` vào `~/drl`, tạo dịch vụ systemd `drl-watch`, bật chạy ngay
-và **tự khởi động lại khi reboot / khi lỗi**. Cuối màn hình phải thấy dòng
+The script installs `drl_watch.py` into `~/drl`, creates a systemd service `drl-watch`,
+starts it immediately, and **restarts it on reboot / on crash**. The last line should show
 `Active: active (running)`.
 
-Trong vài giây, Telegram của bạn sẽ nhận tin **"🤖 Bot DRL đã khởi động"**. Xong! 🎉
-Giờ có thể tắt laptop — bot chạy độc lập trên mây.
+Within seconds your Telegram receives **"🤖 DRL bot started"**. Done! 🎉 You can now close
+the laptop — the bot runs independently in the cloud.
 
 ---
 
-## Quản lý bằng điện thoại (không cần laptop nữa)
+## Managing from your phone (no laptop needed)
 
-Nhắn thẳng cho bot Telegram của bạn:
+Message your Telegram bot directly:
 
-| Lệnh | Tác dụng |
-|------|----------|
-| `/status` | Bot còn sống không, token còn hạn không, đang theo dõi mấy sự kiện |
-| `/list` | Các sự kiện **đang mở đăng ký** ngay bây giờ |
-| `/check` | Bắt bot kiểm tra ngay lập tức |
-| `/token <giá trị>` | Cập nhật token trường mới (khi hết hạn) |
-| `/mssv <mssv>` | Đổi mã số sinh viên |
-| `/help` | Xem lại danh sách lệnh |
+| Command | What it does |
+|---------|--------------|
+| `/status` | Is the bot alive, is the token valid, how many events are tracked |
+| `/list` | Events **open for registration** right now |
+| `/check` | Force an immediate check |
+| `/token <value>` | Update the school token (when it expires) |
+| `/mssv <id>` | Change the student ID |
+| `/help` | Show the command list |
 
-### Khi bot báo "⚠️ Token hết hạn" — cách lấy token mới bằng điện thoại
+### When the bot says "⚠️ Token expired" — getting a new token from your phone
 
-Token trường (`TokenBKNexus`) đọc được từ cookie trình duyệt. Trên điện thoại:
+The school token (`TokenBKNexus`) is a readable browser cookie. On your phone:
 
-**Cách dễ (bookmarklet — làm 1 lần):**
-1. Tạo một bookmark bất kỳ trong trình duyệt điện thoại, rồi **sửa địa chỉ** của bookmark
-   đó thành đúng đoạn sau (dán nguyên văn):
+**Easy way (bookmarklet — set up once):**
+1. Create any bookmark in your phone browser, then **edit its address** to exactly this
+   (paste verbatim):
    ```
-   javascript:(function(){var m=document.cookie.match(/TokenBKNexus=([^;]+)/);if(!m){alert('Chua dang nhap ctsv');return;}prompt('Copy dong duoi roi gui cho bot:','/token '+m[1]);})();
+   javascript:(function(){var m=document.cookie.match(/TokenBKNexus=([^;]+)/);if(!m){alert('Not logged in to ctsv');return;}prompt('Copy the line below and send it to the bot:','/token '+m[1]);})();
    ```
-2. Khi cần token mới: mở **https://ctsv.hust.edu.vn** trên điện thoại, **đăng nhập**, rồi
-   mở bookmark vừa tạo. Nó hiện sẵn dòng `/token xxxxx` → copy.
-3. Dán dòng đó gửi cho bot của bạn. Bot trả lời "✅ Đã cập nhật token".
+2. When you need a new token: open **https://ctsv.hust.edu.vn** on your phone, **log in**,
+   then open that bookmark. It shows a ready `/token xxxxx` line → copy it.
+3. Paste that line to your bot. It replies "✅ Token updated".
 
-> Safari (iPhone): bookmark → Edit → dán vào ô địa chỉ. Chrome (Android): lưu bookmark rồi
-> vào Bookmarks sửa URL. Nếu trình duyệt chặn `javascript:` thì làm "cách thủ công" dưới.
+> Safari (iPhone): bookmark → Edit → paste into the address field. Chrome (Android): save a
+> bookmark, then edit its URL. If the browser blocks `javascript:`, use the manual way below.
 
-**Cách thủ công (khi rảnh có laptop):** làm lại Bước 2 trong `README.md` (F12 → Cookies →
-copy `TokenBKNexus`), rồi gửi `/token <giá trị>` cho bot. Token thường sống khá lâu nên
-việc này ít khi phải làm.
+**Manual way (when you have a laptop):** redo Step 2 in `README.md` (F12 → Cookies → copy
+`TokenBKNexus`), then send `/token <value>` to the bot. The token usually lasts a while, so
+this is rare.
 
 ---
 
-## Kiểm tra / xử lý trên máy chủ (khi cần, qua SSH)
+## Server maintenance (over SSH, when needed)
 
 ```bash
-systemctl status drl-watch        # trạng thái
-journalctl -u drl-watch -f        # xem log chạy trực tiếp (Ctrl+C để thoát)
-sudo systemctl restart drl-watch  # khởi động lại
-sudo systemctl disable --now drl-watch   # dừng hẳn
+systemctl status drl-watch        # status
+journalctl -u drl-watch -f        # live logs (Ctrl+C to exit)
+sudo systemctl restart drl-watch  # restart
+sudo systemctl disable --now drl-watch   # stop for good
 ```
 
-Cập nhật bot (nếu sau này mình sửa code): copy `drl_watch.py` mới lên rồi:
+Update the bot (if the code changes later): copy the new `drl_watch.py` up, then:
 ```bash
 cp ~/drl_watch.py ~/drl/drl_watch.py && sudo systemctl restart drl-watch
 ```
 
 ---
 
-## Lưu ý bảo mật
-- `config.json` trên máy chủ chứa `TokenBKNexus` + token Telegram. Máy chủ là của riêng
-  bạn nên ổn, nhưng đừng chia sẻ quyền SSH / file này cho người khác.
-- Giữ kỹ file private key (`.key`). Mất nó = mất đường vào máy chủ (phải tạo lại).
+## Security notes
+- `config.json` on the server holds your `TokenBKNexus` + Telegram token. The server is
+  yours, so that's fine — just don't share SSH access or that file.
+- Keep the private key (`.key`) safe. Lose it and you lose access to the server (you'd have
+  to recreate it).
