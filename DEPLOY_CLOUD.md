@@ -33,7 +33,7 @@ nhảy tới [Phần B](#phần-b--cài-bot-lên-máy-chủ).
 
 ## Phần B — Cài bot lên máy chủ
 
-Làm trên **laptop** (nơi đang có thư mục `D:\NTK\PROJECTS\DRL`). Mở **PowerShell**.
+Làm trên **laptop**, trong thư mục dự án. Mở **PowerShell**.
 
 ### 1. Đăng nhập thử vào máy chủ
 Thay `<KEY>` = đường dẫn file private key vừa tải, `<IP>` = Public IP:
@@ -45,7 +45,7 @@ Lần đầu gõ `yes`. Vào được (thấy dấu nhắc `ubuntu@...`) là OK.
 > Oracle Ubuntu đăng nhập bằng user **`ubuntu`**. (VPS khác có thể là `root` hoặc tên khác.)
 
 ### 2. Copy bot + cấu hình lên máy chủ
-Chạy ở thư mục dự án trên laptop (cd vào `D:\NTK\PROJECTS\DRL` trước):
+Chạy trong thư mục dự án (đã `cd` vào đó):
 ```powershell
 scp -i "<KEY>" drl_watch.py config.json deploy/setup.sh ubuntu@<IP>:~
 ```
@@ -66,7 +66,7 @@ Giờ có thể tắt laptop — bot chạy độc lập trên mây.
 
 ## Quản lý bằng điện thoại (không cần laptop nữa)
 
-Nhắn thẳng cho bot **@noledrl_bot** trên Telegram:
+Nhắn thẳng cho bot Telegram của bạn:
 
 | Lệnh | Tác dụng |
 |------|----------|
@@ -89,7 +89,7 @@ Token trường (`TokenBKNexus`) đọc được từ cookie trình duyệt. Tr�
    ```
 2. Khi cần token mới: mở **https://ctsv.hust.edu.vn** trên điện thoại, **đăng nhập**, rồi
    mở bookmark vừa tạo. Nó hiện sẵn dòng `/token xxxxx` → copy.
-3. Dán dòng đó gửi cho bot **@noledrl_bot**. Bot trả lời "✅ Đã cập nhật token".
+3. Dán dòng đó gửi cho bot của bạn. Bot trả lời "✅ Đã cập nhật token".
 
 > Safari (iPhone): bookmark → Edit → dán vào ô địa chỉ. Chrome (Android): lưu bookmark rồi
 > vào Bookmarks sửa URL. Nếu trình duyệt chặn `javascript:` thì làm "cách thủ công" dưới.

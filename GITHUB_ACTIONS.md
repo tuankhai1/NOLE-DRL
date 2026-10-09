@@ -23,7 +23,7 @@ Chưa có thì đăng ký tại https://github.com (miễn phí, chỉ cần ema
 ## Bước 3 — Đẩy mã nguồn lên
 
 ### Cách A — Dùng Git (khuyên dùng; mình đã chuẩn bị sẵn repo cục bộ)
-Mở **PowerShell**, ở thư mục `D:\NTK\PROJECTS\DRL`, chạy (thay `<URL>` = địa chỉ repo ở Bước 2):
+Mở **PowerShell** trong thư mục dự án, chạy (thay `<URL>` = địa chỉ repo ở Bước 2):
 ```powershell
 git remote add origin <URL>
 git push -u origin main
@@ -34,7 +34,7 @@ Lần đầu push sẽ hiện cửa sổ đăng nhập GitHub trên trình duy�
 ### Cách B — Không cần Git, dùng web
 1. Trong repo vừa tạo → **Add file → Upload files** → kéo **`drl_watch.py`** vào → **Commit**.
 2. **Add file → Create new file** → ô tên gõ: `.github/workflows/watch.yml` → dán toàn bộ
-   nội dung file `watch.yml` (lấy từ thư mục `D:\NTK\PROJECTS\DRL\.github\workflows\`) →
+   nội dung file `.github/workflows/watch.yml` của dự án →
    **Commit**.
 3. **Tuyệt đối không** upload `config.json`.
 
@@ -58,7 +58,7 @@ Trong repo: **Settings → Secrets and variables → Actions → New repository 
 
 ## Quản lý bằng điện thoại
 
-Nhắn cho **@noledrl_bot** (phản hồi có thể trễ tới ~5 phút vì chờ lần chạy kế tiếp):
+Nhắn cho bot của bạn (phản hồi có thể trễ tới ~5 phút vì chờ lần chạy kế tiếp):
 `/status`, `/list`, `/check`, `/help`.
 
 ### Khi bot báo token hết hạn

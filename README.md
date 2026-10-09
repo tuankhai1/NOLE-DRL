@@ -1,49 +1,51 @@
-# DRL Watcher — bot theo dõi sự kiện đặt vé trên ctsv.hust.edu.vn
+# DRL Watcher — ticket-event notifier bot for ctsv.hust.edu.vn
 
-Bot gọi đúng API mà trang **"Đặt vé"** dùng (`/bknexus/Event/GetEvents`), vài chục giây một
-lần, và **nhắn Telegram về điện thoại ngay** khi:
+A small bot that calls the same API the **"Đặt vé" (Book ticket)** page uses
+(`/bknexus/Event/GetEvents`), checks it on a short interval, and **pushes a Telegram
+message to your phone** as soon as:
 
-- 🎟️ Có **sự kiện mới** xuất hiện
-- 🔔 Một sự kiện **chuyển sang "Đang mở đăng ký"** (quan trọng nhất để kịp giành slot)
-- ♻️ Một sự kiện đang kín chỗ **vừa có slot trống trở lại**
+- 🎟️ A **new event** appears
+- 🔔 An event **switches to "registration open"** (the key moment for grabbing a slot)
+- ♻️ A full event **frees up a slot again**
 
-Bot **chỉ báo**, bạn tự bấm vào đăng ký. Không cần mật khẩu trường.
-
----
-
-## Cần cài gì
-
-- **Python 3** (bạn đã có 3.14). Bot chỉ dùng thư viện chuẩn, **không cần pip install gì cả**.
-- App **Telegram** trên điện thoại.
+The bot only **notifies** — you tap the link and register yourself. No school password required.
 
 ---
 
-## Cài đặt 1 lần (khoảng 5 phút)
+## Requirements
 
-### Bước 1 — Tạo bot Telegram
-1. Mở Telegram, tìm **@BotFather**, bấm **Start**.
-2. Gửi `/newbot`, đặt tên và username (phải kết thúc bằng `bot`, ví dụ `drl_hust_bot`).
-3. BotFather trả về một dòng **token** dạng `123456789:AAE...` → **copy** lại.
-4. Bấm vào link bot vừa tạo và bấm **Start** (để bot được phép nhắn cho bạn).
+- **Python 3** (standard library only — nothing to `pip install`).
+- The **Telegram** app on your phone.
 
-### Bước 2 — Lấy `TokenBKNexus` và MSSV từ web
-1. Mở trình duyệt, đăng nhập **https://ctsv.hust.edu.vn** như bình thường.
-2. Nhấn **F12** → tab **Application** (Chrome/Edge) hoặc **Storage** (Firefox).
-3. Bên trái: **Cookies** → chọn `https://ctsv.hust.edu.vn`.
-4. Tìm dòng tên **`TokenBKNexus`** → copy toàn bộ giá trị (cột Value).
-   - Tìm luôn dòng **`UserName`** (chính là MSSV của bạn) để điền cho khớp.
+---
 
-> Mẹo: token này thường sống khá lâu. Khi nào hết hạn, bot sẽ **tự nhắn Telegram báo bạn copy lại**.
+## One-time setup (~5 minutes)
 
-### Bước 3 — Điền `config.json`
-1. Copy file `config.example.json` thành `config.json` (cùng thư mục).
-2. Mở `config.json`, điền:
+### Step 1 — Create a Telegram bot
+1. Open Telegram, find **@BotFather**, tap **Start**.
+2. Send `/newbot`, choose a name and a username (must end in `bot`).
+3. BotFather returns a **token** like `123456789:AAE...` → **copy** it.
+4. Open your new bot's link and tap **Start** (so it may message you).
+
+### Step 2 — Get `TokenBKNexus` and your student ID from the website
+1. In a browser, log in to **https://ctsv.hust.edu.vn** as usual.
+2. Press **F12** → **Application** tab (Chrome/Edge) or **Storage** (Firefox).
+3. On the left: **Cookies** → select `https://ctsv.hust.edu.vn`.
+4. Copy the value of the **`TokenBKNexus`** cookie.
+   - Also note the **`UserName`** cookie (your student ID) to match it.
+
+> The token usually lasts a while. When it expires, the bot will message you on Telegram
+> asking you to refresh it.
+
+### Step 3 — Fill in `config.json`
+1. Copy `config.example.json` to `config.json` (same folder).
+2. Edit `config.json`:
 
 ```json
 {
-  "session_token": "<dán giá trị cookie TokenBKNexus>",
-  "username": "<MSSV của bạn>",
-  "telegram_bot_token": "<token từ BotFather>",
+  "session_token": "<TokenBKNexus cookie value>",
+  "username": "<your student ID>",
+  "telegram_bot_token": "<token from BotFather>",
   "telegram_chat_id": "",
   "poll_seconds": 30,
   "notify_states": ["OPEN", "SOON"],
@@ -51,76 +53,86 @@ Bot **chỉ báo**, bạn tự bấm vào đăng ký. Không cần mật khẩu 
 }
 ```
 
-3. **Lấy `telegram_chat_id`:** trong Telegram, gửi cho bot một tin bất kỳ (ví dụ "hi"),
-   rồi ở thư mục này chạy:
+3. **Get your `telegram_chat_id`:** send the bot any message (e.g. "hi"), then from the
+   project folder run:
 
    ```
    python drl_watch.py getchat
    ```
 
-   Nó in ra `chat_id` (một dãy số) → dán vào `telegram_chat_id` trong `config.json`.
+   It prints a `chat_id` (a number) → paste it into `telegram_chat_id`.
 
-### Bước 4 — Kiểm tra
+### Step 4 — Verify
 ```
-python drl_watch.py check    # phải in ra danh sách sự kiện -> token OK
-python drl_watch.py test     # phải nhận được tin nhắn test trên Telegram
+python drl_watch.py check    # should print the event list -> token OK
+python drl_watch.py test     # should deliver a test message on Telegram
 ```
 
-Nếu cả hai OK là xong.
+If both work, you're done.
 
 ---
 
-## Chạy bot
+## Running the bot
 
-Cách nhanh nhất: **bấm đúp `run.bat`** (hoặc chạy `python drl_watch.py run`).
-Để cửa sổ đó mở là bot đang chạy. Lần đầu bot gửi 1 tin "đã khởi động".
+Simplest: run `python drl_watch.py run` (Windows users can double-click `run.bat`).
+While that window stays open, the bot is watching. On first start it sends one
+"bot started" message.
 
-### Các lệnh
-| Lệnh | Tác dụng |
-|------|----------|
-| `python drl_watch.py run`     | Chạy vòng lặp theo dõi (mặc định) |
-| `python drl_watch.py once`    | Kiểm tra 1 lần rồi thoát (cho Task Scheduler) |
-| `python drl_watch.py check`   | In danh sách sự kiện hiện tại (test token) |
-| `python drl_watch.py getchat` | Lấy `chat_id` Telegram |
-| `python drl_watch.py test`    | Gửi 1 tin thử |
+### Commands
+| Command | What it does |
+|---------|--------------|
+| `python drl_watch.py run`     | Run the watch loop (default) |
+| `python drl_watch.py once`    | Check once and exit (for schedulers / CI) |
+| `python drl_watch.py check`   | Print the current event list (token test) |
+| `python drl_watch.py getchat` | Get your Telegram `chat_id` |
+| `python drl_watch.py test`    | Send a test message |
 
----
+### Telegram chat commands
+Send these to your bot (only your configured `chat_id` is accepted):
 
-## Chạy nền, tự bật khi mở máy (khuyên dùng)
-
-Để không phải nhớ bật thủ công, dùng **Task Scheduler** của Windows:
-
-1. Mở **Task Scheduler** → **Create Task** (không phải Basic Task).
-2. Tab **General**: đặt tên `DRL Watcher`; chọn **Run whether user is logged on or not**
-   và tick **Run with highest privileges** (tùy chọn). Có thể tick **Hidden** để chạy ẩn.
-3. Tab **Triggers** → **New** → **At log on** (hoặc At startup).
-4. Tab **Actions** → **New**:
-   - Program/script: đường dẫn `python.exe` của bạn
-     (chạy `where python` trong CMD để lấy, ví dụ
-     `C:\Users\tkng1\AppData\Local\Python\pythoncore-3.14-64\python.exe`)
-   - Add arguments: `drl_watch.py run`
-   - Start in: `D:\NTK\PROJECTS\DRL`
-5. Tab **Settings**: tick **If the task fails, restart every** 1 minute, và
-   **Do not stop** if runs long. OK.
-
-> Lưu ý: máy phải **bật và có mạng** thì bot mới chạy. Nếu muốn chạy 24/7 kể cả khi tắt
-> máy, cần đặt trên một máy luôn mở (VPS/Raspberry Pi…). Nói mình nếu bạn muốn hướng đó.
+| Command | What it does |
+|---------|--------------|
+| `/status` | Bot health: token validity, number of events tracked, how many are open |
+| `/list`   | Events that are **open for registration right now** |
+| `/check`  | Force an immediate check |
+| `/token <value>` | Update `TokenBKNexus` when it expires |
+| `/mssv <id>` | Update the student ID |
+| `/help`   | Show the command list |
 
 ---
 
-## Chỉnh nhanh
+## Configuration
 
-- **Báo dày/thưa hơn:** đổi `poll_seconds` (giây). Mặc định `30`. Đừng để quá nhỏ (<10).
-- **Bớt báo sự kiện mới chưa mở:** đặt `notify_new_any_state` = `false` → chỉ báo
-  sự kiện mới đang `OPEN`/`SOON`.
+Settings live in `config.json`, or may be supplied via environment variables
+(`DRL_SESSION_TOKEN`, `DRL_USERNAME`, `DRL_TELEGRAM_BOT_TOKEN`, `DRL_TELEGRAM_CHAT_ID`),
+which take precedence — useful for CI/secrets.
 
-## File trong thư mục
-- `drl_watch.py` — bot.
-- `config.json` — cấu hình của bạn (chứa token, **không chia sẻ cho ai**).
-- `config.example.json` — mẫu.
-- `state.json` — bot tự tạo, nhớ các sự kiện đã thấy (xóa file này để "quên" và báo lại từ đầu).
-- `run.bat` — bấm đúp để chạy.
+- **Check more/less often:** change `poll_seconds`. Default `30`. Don't go below ~10.
+- **Fewer "new but not-yet-open" alerts:** set `notify_new_any_state` to `false` to only
+  notify about new events already in `OPEN`/`SOON`.
 
-## Khi token hết hạn
-Bot sẽ nhắn Telegram "⚠️ Token hết hạn". Lúc đó làm lại **Bước 2** (copy `TokenBKNexus`
-mới), dán vào `config.json`, chạy lại bot.
+## Running it 24/7 (no laptop required)
+
+Two documented options:
+
+- **GitHub Actions** (free, no card, checks every ~5 min) — see `GITHUB_ACTIONS.md`.
+- **A free always-on cloud VM** (30-second checks, true 24/7) — see `DEPLOY_CLOUD.md`.
+
+## Files
+- `drl_watch.py` — the bot.
+- `config.json` — your config (contains your token; **never commit or share it**). Ignored by git.
+- `config.example.json` — template.
+- `state.json` — auto-created; remembers seen events (delete it to "forget" and re-baseline).
+- `run.bat` — convenience launcher for Windows.
+- `.github/workflows/watch.yml` — the GitHub Actions schedule.
+- `deploy/setup.sh` — installs the bot as a systemd service on a Linux VM.
+
+## When the token expires
+The bot sends a Telegram message: "⚠️ Token expired". Redo **Step 2** (copy a fresh
+`TokenBKNexus`), update `session_token` (or the `DRL_SESSION_TOKEN` secret if running on
+GitHub Actions), and the bot resumes.
+
+## Security notes
+- `config.json` holds your session token and bot token — keep it private (it is git-ignored).
+- When running on GitHub Actions, keep the repository's secrets in **Settings → Secrets**,
+  never in the code.
